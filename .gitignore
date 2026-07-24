@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+env/
+ENV/
+
+# 环境配置（含敏感信息）
+.env
+
+# 数据文件
+backend/data/chroma/
+backend/data/model_cache/
+backend/data/uploads/
+backend/data/*.db
+backend/data/*.pkl
+
+# Streamlit
+.streamlit/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 不上传deployment.md
+deployment.md
+
+
+# 截图与演示图片
+001*.jpg
+002*.png
+003*.png
+004*.png
+005*.png
+006*.png
+案例*.png
+
+# 所有图片
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.svg
+*.webp
+*.ico
+
+# solo 文件夹
+solo/
+
+
+#_private不上传
+_private/

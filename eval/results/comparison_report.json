@@ -1,0 +1,248 @@
+{
+  "report_type": "ab_comparison",
+  "generated_at": "2026-07-22 08:25:06",
+  "baseline_eval_date": "2026-07-21 21:28:00",
+  "rerank_eval_date": "2026-07-21 21:35:55",
+  "dataset": "LexAI 法律文档评估数据集",
+  "total_questions": 20,
+  "overall": {
+    "answer_relevance": {
+      "label": "Answer Relevance (DeepSeek Judge)",
+      "baseline_mean": 0.94,
+      "rerank_mean": 1.0,
+      "absolute_change": 0.06,
+      "relative_change_pct": 6.38,
+      "arrow": "▲",
+      "baseline_std": 0.1908,
+      "rerank_std": 0.0
+    },
+    "faithfulness": {
+      "label": "Faithfulness (DeepSeek Judge)",
+      "baseline_mean": 1.0,
+      "rerank_mean": 1.0,
+      "absolute_change": 0.0,
+      "relative_change_pct": 0.0,
+      "arrow": "—",
+      "baseline_std": 0.0,
+      "rerank_std": 0.0
+    },
+    "knowledge_base_coverage": {
+      "label": "Knowledge Base Coverage（知识库覆盖率）",
+      "baseline": 0.95,
+      "rerank": 1.0,
+      "absolute_change": 0.05,
+      "relative_change_pct": 5.26,
+      "arrow": "▲"
+    },
+    "avg_processing_time_ms": {
+      "label": "Avg Processing Time（平均处理时间 ms）",
+      "baseline": 1305.43,
+      "rerank": 1619.25,
+      "absolute_change": 313.82,
+      "relative_change_pct": 24.04,
+      "arrow": "▲"
+    },
+    "avg_citations_per_query": {
+      "label": "Avg Citations / Query（平均引用数）",
+      "baseline": 5.0,
+      "rerank": 5.0,
+      "absolute_change": 0.0,
+      "relative_change_pct": 0.0,
+      "arrow": "—"
+    },
+    "avg_citation_score": {
+      "label": "Avg Citation Score（平均引用得分）",
+      "baseline": 0.0785,
+      "rerank": 0.9479,
+      "absolute_change": 0.8694,
+      "relative_change_pct": 1107.52,
+      "arrow": "▲"
+    }
+  },
+  "breakdown": {
+    "侵权责任": {
+      "baseline": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 1406.99,
+        "avg_citations": 5.0
+      },
+      "rerank": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 1491.66,
+        "avg_citations": 5.0
+      },
+      "found_rate_change_pct": 0.0,
+      "arrow": "—"
+    },
+    "公司法": {
+      "baseline": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 1568.27,
+        "avg_citations": 5.0
+      },
+      "rerank": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 2156.66,
+        "avg_citations": 5.0
+      },
+      "found_rate_change_pct": 0.0,
+      "arrow": "—"
+    },
+    "劳动法": {
+      "baseline": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 1213.35,
+        "avg_citations": 5.0
+      },
+      "rerank": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 1476.63,
+        "avg_citations": 5.0
+      },
+      "found_rate_change_pct": 0.0,
+      "arrow": "—"
+    },
+    "合同法": {
+      "baseline": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 1249.46,
+        "avg_citations": 5.0
+      },
+      "rerank": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 1427.61,
+        "avg_citations": 5.0
+      },
+      "found_rate_change_pct": 0.0,
+      "arrow": "—"
+    },
+    "婚姻家庭": {
+      "baseline": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 1505.34,
+        "avg_citations": 5.0
+      },
+      "rerank": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 1669.56,
+        "avg_citations": 5.0
+      },
+      "found_rate_change_pct": 0.0,
+      "arrow": "—"
+    },
+    "民事诉讼法": {
+      "baseline": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 1113.54,
+        "avg_citations": 5.0
+      },
+      "rerank": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 1409.48,
+        "avg_citations": 5.0
+      },
+      "found_rate_change_pct": 0.0,
+      "arrow": "—"
+    },
+    "民法典-总则": {
+      "baseline": {
+        "found": 3,
+        "total": 3,
+        "found_rate": 1.0,
+        "avg_time_ms": 1406.29,
+        "avg_citations": 5.0
+      },
+      "rerank": {
+        "found": 3,
+        "total": 3,
+        "found_rate": 1.0,
+        "avg_time_ms": 1167.57,
+        "avg_citations": 5.0
+      },
+      "found_rate_change_pct": 0.0,
+      "arrow": "—"
+    },
+    "民法典-物权": {
+      "baseline": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 1189.15,
+        "avg_citations": 5.0
+      },
+      "rerank": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 1350.8,
+        "avg_citations": 5.0
+      },
+      "found_rate_change_pct": 0.0,
+      "arrow": "—"
+    },
+    "知识产权": {
+      "baseline": {
+        "found": 1,
+        "total": 2,
+        "found_rate": 0.5,
+        "avg_time_ms": 1188.72,
+        "avg_citations": 5.0
+      },
+      "rerank": {
+        "found": 2,
+        "total": 2,
+        "found_rate": 1.0,
+        "avg_time_ms": 2767.29,
+        "avg_citations": 5.0
+      },
+      "found_rate_change_pct": 100.0,
+      "arrow": "▲"
+    },
+    "继承法": {
+      "baseline": {
+        "found": 1,
+        "total": 1,
+        "found_rate": 1.0,
+        "avg_time_ms": 1020.05,
+        "avg_citations": 5.0
+      },
+      "rerank": {
+        "found": 1,
+        "total": 1,
+        "found_rate": 1.0,
+        "avg_time_ms": 1382.84,
+        "avg_citations": 5.0
+      },
+      "found_rate_change_pct": 0.0,
+      "arrow": "—"
+    }
+  },
+  "metadata": {
+    "note": "评估在完全相同的数据集和 API 配置下进行，仅切换 use_rerank 参数。"
+  },
+  "summary_sentence": "对比结果: Answer Relevance (DeepSeek Judge) ▲ 6.4% | Knowledge Base Coverage ▲ 5.3% | Avg Processing Time ▲ 24.0% | Avg Citation Score ▲ 1107.5%"
+}

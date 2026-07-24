@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: legal-qa-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-demo_key}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+    volumes:
+      - ./backend/data:/app/backend/data
+    restart: unless-stopped
+
+  frontend:
+    build: .
+    container_name: legal-qa-frontend
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
+    command: streamlit run frontend/app.py --server.port 8501 --server.address 0.0.0.0
+    restart: unless-stopped
