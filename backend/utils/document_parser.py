@@ -25,6 +25,42 @@ except ImportError:
     Document = None
     print("Warning: python-docx not installed. Word document parsing will not work.")
 
+def extract_front_matter(text: str):
+    """【新增·仅解析元数据，不改任何切分逻辑】
+    解析 Markdown 文件顶部"爬虫写入的 front-matter"——连续多行 '# 键: 值'
+    形式（例：# 权威机构: central_bank / # 令号: 国务院令第768号 /
+    # 排序键: 768 / # 施行日期: 2025-01-01 / # 效力状态: current）。
+    返回 (cleaned_text, meta_dict)：
+      - cleaned_text：剔除全部 front-matter 行后的正文（防止元数据污染 chunk）；
+      - meta_dict：解析出的键值对，供后续写入 chunk.metadata（不会改动原有关键字段）。
+    兼容性（仅新增、不改原有行为）：
+      - 原代码只剔除 # 标题/来源/链接: 三行；本函数剔除顶部全部 '# 键: 值' 行，
+        对这三类行的处理结果与原来一致，其余正文（如真正的 Markdown 章节标题
+        '# 第一章' 因不含冒号）不会被误删。
+      - 若文件顶部首行不是 '# 键: 值' 格式，则判定为无 front-matter，原样返回，
+        原有 Markdown 标题/条款切分逻辑完全不受影响。
+    """
+    meta = {}
+    lines = text.split('\n')
+    idx = 0
+    for line in lines:
+        m = re.match(r'^#\s*([^:：\n]+)[：:]\s*(.*)$', line)
+        if m:
+            key = m.group(1).strip()
+            val = m.group(2).strip()
+            if key:
+                meta[key] = val
+                idx += 1
+            else:
+                break
+        else:
+            break
+    if idx == 0:
+        # 首行即非 front-matter → 整篇无 front-matter，原样返回，不影响 Markdown 章节标题切分
+        return text, {}
+    cleaned = '\n'.join(lines[idx:]).lstrip('\n')
+    return cleaned, meta
+
 class DocumentChunk:
     def __init__(self, content: str, page_number: Optional[int] = None, 
                  paragraph_number: Optional[int] = None, metadata: Dict[str, Any] = None):
@@ -123,8 +159,10 @@ class DocumentParser:
             with open(file_path, 'r', encoding='gbk') as f:
                 text = f.read()
 
-        # 去掉爬虫写入的元数据行（# 标题: / # 来源: / # 链接:），避免污染 chunk
-        text = re.sub(r'^#\s*(标题|来源|链接):.*\n', '', text, flags=re.MULTILINE)
+        # 解析并剔除爬虫写入的 front-matter（兼容原逻辑：# 标题/来源/链接: 三种行
+        # 仍被剔除；其余真正的 Markdown 章节标题因不含冒号不会被误删）。
+        # front_meta 仅作为新增元数据并入 chunk，不改变原有切分与字段行为。
+        text, front_meta = extract_front_matter(text)
 
         # 策略1：按 Markdown 标题切分
         heading_pattern = re.compile(r'^(#{1,3})\s+(.+)$', re.MULTILINE)
@@ -154,6 +192,7 @@ class DocumentParser:
                     metadata={
                         "filename": filename,
                         "section": section_title,
+                        **front_meta,
                     }
                 ))
             if chunks:
@@ -196,6 +235,7 @@ class DocumentParser:
                     metadata={
                         "filename": filename,
                         "section": section_title,
+                        **front_meta,
                     }
                 ))
             return chunks
@@ -207,7 +247,7 @@ class DocumentParser:
                 content=para,
                 page_number=1,
                 paragraph_number=len(chunks) + 1,
-                metadata={"filename": filename}
+                metadata={"filename": filename, **front_meta}
             ))
         return chunks
     

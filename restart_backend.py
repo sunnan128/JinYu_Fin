@@ -114,13 +114,13 @@ def kill_processes(pids: list) -> None:
                 shell=True, capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
-                print(f"  ✅ 已终止 PID {pid}")
+                print(f"  [OK] 已终止 PID {pid}")
             elif "not found" in result.stderr.lower():
-                print(f"  PID {pid} 已不存在（自动消失）")
+                print(f"  [..] PID {pid} 已不存在（自动消失）")
             else:
-                print(f"  ⚠ 终止 PID {pid} 失败: {result.stderr.strip()}")
+                print(f"  [WARN] 终止 PID {pid} 失败: {result.stderr.strip()}")
         except Exception as e:
-            print(f"  ⚠ 终止 PID {pid} 异常: {e}")
+            print(f"  [WARN] 终止 PID {pid} 异常: {e}")
 
 
 def wait_port_free(port: int, max_wait: int = 15) -> bool:
@@ -179,10 +179,10 @@ def restart_backend() -> bool:
         print(f"\n[2/5] 等待端口 {PORT} 释放...")
         if not wait_port_free(PORT, max_wait=15):
             remaining = _parse_netstat_port(PORT)
-            print(f"  ❌ 端口 {PORT} 在 15 秒内未释放")
+            print(f"  [ERR] 端口 {PORT} 在 15 秒内未释放")
             if remaining:
                 print(f"  剩余进程: {remaining}")
-                print(f"  💡 尝试强制终止: taskkill /F /PID {' /PID '.join(map(str, remaining))}")
+                print(f"  [HINT] 尝试强制终止: taskkill /F /PID {' /PID '.join(map(str, remaining))}")
             else:
                 print(f"  无关联进程，可能是系统保留或非 Python 进程占用")
             return False
@@ -192,7 +192,7 @@ def restart_backend() -> bool:
     print(f"\n[{'3' if not go_direct else '1'}/5] 启动后端 (端口 {PORT})...")
     backend_dir = os.path.join(PROJECT_DIR, "backend")
     if not os.path.exists(backend_dir):
-        print(f"  ❌ 后端目录不存在: {backend_dir}")
+        print(f"  [ERR] 后端目录不存在: {backend_dir}")
         return False
 
     python_exe = sys.executable
@@ -209,7 +209,7 @@ def restart_backend() -> bool:
         print(f"  Python: {python_exe}")
         print(f"  端口:   {PORT}")
     except Exception as e:
-        print(f"  ❌ 启动失败: {e}")
+        print(f"  [ERR] 启动失败: {e}")
         return False
 
     # 验证就绪
@@ -218,13 +218,13 @@ def restart_backend() -> bool:
         try:
             resp = urllib.request.urlopen(f'http://localhost:{PORT}/health', timeout=2)
             if resp.status == 200:
-                print(f"  ✅ 后端服务已就绪 (耗时 {i+1} 秒)")
+                print(f"  [OK] 后端服务已就绪 (耗时 {i+1} 秒)")
                 return True
         except Exception:
             pass
         time.sleep(1)
 
-    print(f"  ⚠ 后端服务启动超时，请检查新窗口中是否有报错")
+    print(f"  [WARN] 后端服务启动超时，请检查新窗口中是否有报错")
     return False
 
 
@@ -240,8 +240,8 @@ if __name__ == "__main__":
     print()
     print("=" * 50)
     if success:
-        print("  结果: ✅ 服务已恢复")
+        print("  结果: [OK] 服务已恢复")
     else:
-        print("  结果: ❌ 启动失败，请查看上方日志诊断")
+        print("  结果: [ERR] 启动失败，请查看上方日志诊断")
     print("=" * 50)
     sys.exit(0 if success else 1)

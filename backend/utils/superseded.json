@@ -1,0 +1,76 @@
+{
+  "version": 3,
+  "description": "金融法规废止/失效条款对照表，供 hallucination_guard L3 生成后校验使用。手动维护：新增条目时填 law/clause/keywords/status/replaced_by/issued_date/abolished_by/abolished_date/source_url/source；status 固定为 abolished；易误报的条目设 strict:true（需同时出现 law 名称才判定命中）。字段含义：issued_date=被废止条款所属法规的发行/施行日期；abolished_by=明文废止/修改该条款的法规或决定名称；abolished_date=该废止决定的【施行日】（口径统一为决定施行日，非通过日）；source_url=官方原文链接（供提示条跳转核实）；source=备注。⚠️ 日期与链接均为人工整理，正式使用前请以官方公报/国家法律法规数据库(flk.npc.gov.cn)核对。",
+  "entries": [
+    {
+      "id": "commercial_bank_ltv_75",
+      "law": "中华人民共和国商业银行法",
+      "clause": "第三十九条（存贷比不得超过75%）",
+      "keywords": ["存贷比", "75%", "贷款余额与存款余额的比例"],
+      "status": "abolished",
+      "strict": false,
+      "replaced_by": "商业银行流动性风险管理办法",
+      "issued_date": "1995-07-01",
+      "abolished_by": "《全国人民代表大会常务委员会关于修改〈中华人民共和国商业银行法〉的决定》（2015年8月29日通过）",
+      "abolished_date": "2015-10-01",
+      "source_url": "https://flk.npc.gov.cn/",
+      "source": "1995年《商业银行法》第三十九条设存贷比75%上限；2015年8月29日全国人大常委会修改决定删除该硬性约束，改为流动性监管指标，决定自2015年10月1日起施行"
+    },
+    {
+      "id": "old_aml_law_2006",
+      "law": "中华人民共和国反洗钱法（2006）",
+      "clause": "全文",
+      "keywords": ["反洗钱法（2006）", "2006年反洗钱法"],
+      "status": "abolished",
+      "strict": true,
+      "replaced_by": "中华人民共和国反洗钱法（2024修订）",
+      "issued_date": "2007-01-01",
+      "abolished_by": "《中华人民共和国反洗钱法》（2024年修订）",
+      "abolished_date": "2025-01-01",
+      "source_url": "https://flk.npc.gov.cn/",
+      "source": "2024年修订通过的《反洗钱法》自2025年1月1日起施行，2006年版同时废止、整体被替代失效"
+    },
+    {
+      "id": "principal_guaranteed_wealth",
+      "law": "关于规范金融机构资产管理业务的指导意见",
+      "clause": "保本保收益理财产品相关条款",
+      "keywords": ["保本理财", "保本保收益", "刚性兑付"],
+      "status": "abolished",
+      "strict": false,
+      "replaced_by": "资管新规（打破刚性兑付）",
+      "issued_date": "（此前理财业务监管框架允许保本保收益，无单一发行文件）",
+      "abolished_by": "《关于规范金融机构资产管理业务的指导意见》（资管新规）",
+      "abolished_date": "2018-04-27",
+      "source_url": "https://www.gov.cn/xinwen/2018-04/27/content_5285867.htm",
+      "source": "资管新规（2018-04-27发布施行）要求打破刚性兑付，保本保收益理财产品退出市场"
+    },
+    {
+      "id": "ipo_approval_system",
+      "law": "中华人民共和国证券法（旧核准制）",
+      "clause": "新股发行核准制相关条款",
+      "keywords": ["核准制", "审批制"],
+      "status": "abolished",
+      "strict": true,
+      "replaced_by": "全面注册制",
+      "issued_date": "1999-07-01",
+      "abolished_by": "《关于全面实行股票发行注册制的意见》及全面注册制改革",
+      "abolished_date": "2023-02-17",
+      "source_url": "https://www.csrc.gov.cn/",
+      "source": "全面实行股票发行注册制（2023-02-17启动）后，旧核准制相关条款失效"
+    },
+    {
+      "id": "deposit_rate_cap",
+      "law": "中国人民银行",
+      "clause": "存款利率上限管制",
+      "keywords": ["存款利率上限", "存款利率管制", "利率管制"],
+      "status": "abolished",
+      "strict": false,
+      "replaced_by": "利率市场化",
+      "issued_date": "（1990年代起人民银行对存款利率实行浮动上限管制）",
+      "abolished_by": "中国人民银行放开存款利率浮动上限（利率市场化改革）",
+      "abolished_date": "2015-10-23",
+      "source_url": "http://www.pbc.gov.cn/",
+      "source": "2015年10月23日人民银行宣布放开存款利率浮动上限，利率管制取消"
+    }
+  ]
+}

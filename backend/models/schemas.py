@@ -40,11 +40,18 @@ class Citation(BaseModel):
     content: str
     score: float
 
+class GuardInfo(BaseModel):
+    """L3 幻觉抑制标记：当答案引用已废止/失效条款时打标，供前端展示时效风险告警。"""
+    blocked: bool = False
+    action: str = "allow"  # allow | regenerate
+    hits: List[Dict[str, Any]] = Field(default_factory=list)
+
 class QueryResponse(BaseModel):
     answer: str
     citations: List[Citation]
     found_in_knowledge_base: bool
     processing_time_ms: float
+    guard: Optional[GuardInfo] = None  # 新增：L3 幻觉抑制标记（前端可据此展示时效风险告警）
 
 class UploadResponse(BaseModel):
     document_id: str

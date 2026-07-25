@@ -15,10 +15,10 @@ from pathlib import Path
 
 # ── 复用基础结构 ──
 try:
-    from .document_parser import DocumentChunk
+    from .document_parser import DocumentChunk, extract_front_matter
 except ImportError:
     try:
-        from document_parser import DocumentChunk
+        from document_parser import DocumentChunk, extract_front_matter
     except ImportError:
         class DocumentChunk:
             def __init__(self, content: str, page_number=None,
@@ -181,16 +181,19 @@ class FinancialDocumentParser:
             # 兜底用系统默认编码
             with open(file_path, 'r', encoding='gbk') as f:
                 text = f.read()
-        # 去掉爬虫写入的元数据行（# 标题: / # 来源: / # 链接:），避免污染 chunk
-        text = re.sub(r'^#\s*(标题|来源|链接):.*\n', '', text, flags=re.MULTILINE)
+        # 解析并剔除爬虫写入的 front-matter（兼容原逻辑：# 标题/来源/链接: 三种行
+        # 仍被剔除；其余真正的 Markdown 章节标题因不含冒号不会被误删）。
+        # front_meta 仅作为新增元数据并入 chunk，不改变原有切分与字段行为。
+        text, front_meta = extract_front_matter(text)
         # 检测前 500 字确定 doctype
         doctype = FinancialDocumentParser.detect_doctype(filename, text[:500])
         chunks = FinancialDocumentParser._split_financial_text(
             text, 1, filename, doctype
         )
-        # 给每块补上文件名
+        # 给每块补上文件名，并并入爬虫元数据（仅新增键，不动原有关键字段）
         for c in chunks:
             c.metadata['filename'] = filename
+            c.metadata.update(front_meta)
         return chunks
 
     # ═══════════════════════════════════════════════

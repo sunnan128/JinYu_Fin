@@ -15,6 +15,7 @@ import subprocess
 import sys
 import os
 from datetime import datetime
+from guard_banner import build_guard_banner_html
 
 API_URL = "http://localhost:8006"
 
@@ -71,6 +72,56 @@ st.markdown("""
         margin-bottom: 1.4rem;
     }
     .disclaimer strong { color: #14513b; }
+
+    /* ── L3 幻觉抑制：⚠️ 时效风险提示条 ── */
+    .guard-banner {
+        background: #fff8ec;
+        border: 1px solid #f0c674;
+        border-left: 4px solid #e8a33d;
+        border-radius: 10px;
+        padding: 0.8rem 1rem;
+        margin: 0.5rem 0 1rem 0;
+        font-size: 0.85rem;
+        color: #6b4e1f;
+        line-height: 1.6;
+    }
+    .guard-banner .guard-title {
+        font-family: 'Noto Serif SC', serif;
+        font-weight: 700;
+        font-size: 0.95rem;
+        color: #b9740f;
+        margin-bottom: 0.4rem;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    .guard-banner .guard-body { margin-bottom: 0.4rem; }
+    .guard-banner .guard-em { color: #b9740f; font-weight: 600; }
+    .guard-banner .guard-list {
+        margin: 0.3rem 0 0 0;
+        padding-left: 1.2rem;
+    }
+    .guard-banner .guard-list li {
+        margin-bottom: 0.3rem;
+        color: #6b4e1f;
+    }
+    .guard-banner .guard-list strong { color: #8a5a11; }
+    .guard-banner .guard-details {
+        margin-top: 0.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+    }
+    .guard-banner .guard-detail {
+        font-size: 0.8rem;
+        color: #8a6a2f;
+    }
+    .guard-banner .guard-detail a {
+        color: #1a5fb4;
+        font-weight: 600;
+        text-decoration: underline;
+    }
+    .guard-banner .guard-detail a:hover { color: #0b3d91; }
 
     /* ── 卡片标题（通用） ── */
     .card-title {
@@ -197,6 +248,18 @@ st.markdown("""
         background: #176b49 !important;
         box-shadow: 0 2px 8px rgba(31,138,95,0.25);
     }
+    /* ── 上传中禁用态 ── */
+    .stButton > button[kind="primary"]:disabled,
+    .stButton > button:disabled {
+        opacity: 0.45 !important;
+        cursor: not-allowed !important;
+        background: #9bb3a8 !important;
+        box-shadow: none !important;
+    }
+    .stButton > button[kind="primary"]:disabled:hover {
+        background: #9bb3a8 !important;
+        box-shadow: none !important;
+    }
     div[data-testid="stTextInput"] input {
         border-radius: 8px;
         border: 1px solid #e3efe9;
@@ -277,6 +340,92 @@ st.markdown("""
         font-size: 0.7rem;
         color: #b6ccc2;
         letter-spacing: 0.05em;
+    }
+
+    /* ══════════════════════════════════════════
+       文档管理右列独立滚动（JS 注入主导，CSS 兜底）
+       ══════════════════════════════════════════ */
+
+    .doc-card-header {
+        font-family: 'Noto Serif SC', serif;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #14513b;
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.25rem;
+        border-bottom: 2px solid #e3efe9;
+    }
+
+    /* ── 滚动列容器样式（JS 会将该类加到右列 column 上） ── */
+    .scroll-col {
+        background: #ffffff !important;
+        border: 1px solid #e3efe9 !important;
+        border-radius: 10px !important;
+        padding: 0.75rem 0.75rem 0.25rem !important;
+        max-height: 70vh !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        scrollbar-width: thin;       /* Firefox */
+        scrollbar-color: #d0dfd7 transparent;
+    }
+    .scroll-col::-webkit-scrollbar {
+        width: 6px;
+    }
+    .scroll-col::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .scroll-col::-webkit-scrollbar-thumb {
+        background: #d0dfd7;
+        border-radius: 3px;
+        opacity: 0.6;
+        transition: opacity 0.2s ease;
+    }
+    .scroll-col::-webkit-scrollbar-thumb:hover {
+        background: #9bb3a8;
+        opacity: 1;
+    }
+
+    /* ── 文档条目行 ── */
+    .doc-row-name {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #1c352c;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .doc-row-meta {
+        font-size: 0.72rem;
+        color: #9bb3a8;
+        margin-top: 1px;
+    }
+
+    /* ── 卡片空状态 ── */
+    .doc-card-empty {
+        text-align: center;
+        padding: 2rem 0.5rem;
+        color: #9bb3a8;
+        font-size: 0.85rem;
+    }
+    .doc-card-empty-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+        opacity: 0.5;
+    }
+
+    /* ── 响应式：移动端 ── */
+    @media (max-width: 768px) {
+        .scroll-col {
+            max-height: 35vh !important;
+        }
+    }
+
+    /* ── 文件上传区加大 ── */
+    section[data-testid="stFileUploaderDropzone"] {
+        min-height: 180px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -425,11 +574,22 @@ with st.sidebar:
             else:
                 log = (result.stdout or "") + (result.stderr or "")
                 if log.strip():
-                    st.error(f"❌ 自动恢复失败，日志如下：")
-                    with st.expander("📋 查看详细日志", expanded=True):
-                        st.code(log.strip(), language="text")
+                    st.error("❌ 自动恢复失败，详情如下：")
+                    # 用大文本域替代 st.code，支持滚动查看完整日志
+                    st.text_area(
+                        label="完整日志输出",
+                        value=log.strip(),
+                        height=400,
+                        disabled=True,
+                        label_visibility="collapsed",
+                    )
+                    # 底部显示一些统计信息
+                    lines = log.strip().split('\n')
+                    err_lines = [l for l in lines if 'ERR' in l or '失败' in l or '❌' in l]
+                    if err_lines:
+                        st.caption(f"共 {len(lines)} 行，其中 {len(err_lines)} 个错误/警告")
                 else:
-                    st.error("❌ 自动恢复失败（无详细日志）")
+                    st.error("❌ 自动恢复失败（无详细日志输出）")
 
     st.markdown('<div class="sidebar-section">关于系统</div>', unsafe_allow_html=True)
     st.markdown("""
@@ -472,6 +632,21 @@ if not health_ok:
 
 tab_doc, tab_qa = st.tabs(["📂 文档管理", "💡 金融检索"])
 
+# ── 上传模块 session state ──
+# upload_key_counter: 每完成一批上传后递增，用于重置 file_uploader widget（释放文件名额）
+# processed_files: 最近成功解析的文件列表，供可视化回显
+# uploading: 上传锁——True 表示有任务正在执行，禁用按钮防止重复点击
+if "upload_key_counter" not in st.session_state:
+    st.session_state.upload_key_counter = 0
+if "processed_files" not in st.session_state:
+    st.session_state.processed_files = []
+if "uploading" not in st.session_state:
+    st.session_state.uploading = False
+if "confirm_del" not in st.session_state:
+    st.session_state.confirm_del = None
+
+BATCH_LIMIT = 5  # 单批次最多处理的文件数
+
 
 # ═══════════════════════════════════════════════
 # Tab 1：文档管理
@@ -483,72 +658,214 @@ with tab_doc:
     with col_left:
         st.markdown('<div class="card-title" style="border-bottom:none;margin-bottom:0.5rem;">📄 上传金融资料</div>', unsafe_allow_html=True)
 
+        # 动态 key 确保每批上传完成后 widget 自动重置（旧文件不再保留）
         uploaded_files = st.file_uploader(
-            "选择金融文档（PDF / Word / Markdown，最多 5 份）",
+            "选择金融文档（PDF / Word / Markdown，单批最多 5 份，可分批连续上传）",
             type=["pdf", "docx", "doc", "md", "markdown"],
             accept_multiple_files=True,
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            key=f"file_uploader_{st.session_state.upload_key_counter}"
         )
 
         if uploaded_files:
-            if len(uploaded_files) > 5:
-                st.error(f"最多上传 5 份文件，当前选了 {len(uploaded_files)} 份")
-            else:
+            # 不超过限制：正常显示与上传
+            if len(uploaded_files) <= BATCH_LIMIT:
+                # ── 上传中锁定提示 ──
+                if st.session_state.uploading:
+                    st.warning("⏳ 文件正在上传解析中，请等待完成后再操作", icon="🔄")
                 st.caption(f"已选 {len(uploaded_files)} 份文件")
-            if st.button("上传并解析", type="primary", use_container_width=True):
-                overall_bar = st.progress(0, text="准备中…")
-                detail_status = st.empty()
-                results = []
 
-                for i, f in enumerate(uploaded_files):
-                    overall_bar.progress(
-                        i / len(uploaded_files),
-                        text=f"文件 ({i+1}/{len(uploaded_files)})"
-                    )
-                    file_bar = st.progress(0.0, text=f"⏳ {f.name}")
+                if st.button(
+                    "上传并解析",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=st.session_state.uploading
+                ):
+                    st.session_state.uploading = True
+                    overall_bar = st.progress(0, text="准备中…")
+                    detail_status = st.empty()
+                    results = []
 
-                    result = upload_document_async(f, file_bar, detail_status)
-                    if result:
-                        results.append(result)
-                    file_bar.empty()
+                    for i, f in enumerate(uploaded_files):
+                        overall_bar.progress(
+                            i / len(uploaded_files),
+                            text=f"文件 ({i+1}/{len(uploaded_files)})"
+                        )
+                        file_bar = st.progress(0.0, text=f"⏳ {f.name}")
 
-                overall_bar.empty()
-                detail_status.empty()
+                        result = upload_document_async(f, file_bar, detail_status)
+                        if result:
+                            results.append(result)
+                        file_bar.empty()
 
-                if results:
-                    total_chunks = sum(r['chunk_count'] for r in results)
-                    st.success(f"✅ {len(results)} 份文件全部解析完成，共 {total_chunks} 个片段")
+                    overall_bar.empty()
+                    detail_status.empty()
+
+                    if results:
+                        total_chunks = sum(r['chunk_count'] for r in results)
+                        now_str = datetime.now().strftime("%H:%M:%S")
+                        for r in results:
+                            st.session_state.processed_files.append({
+                                "filename": r["filename"],
+                                "chunk_count": r["chunk_count"],
+                                "time": now_str,
+                            })
+                        st.success(f"✅ {len(results)} 份文件全部解析完成，共 {total_chunks} 个片段")
+                        st.session_state.upload_key_counter += 1
+                    else:
+                        st.warning("⚠ 文件均上传失败，请检查后端服务后重试")
+                    # 无论成功或失败，释放上传锁
+                    st.session_state.uploading = False
+                    time.sleep(1.2)
+                    st.rerun()
+            else:
+                # 用户一次选了超过 BATCH_LIMIT 份：不硬拦截，自动分批处理
+                batch_files = uploaded_files[:BATCH_LIMIT]
+                remaining = len(uploaded_files) - BATCH_LIMIT
+                # ── 上传中锁定提示 ──
+                if st.session_state.uploading:
+                    st.warning("⏳ 文件正在上传解析中，请等待完成后再操作", icon="🔄")
+                st.info(
+                    f"本次处理前 {BATCH_LIMIT} 份，剩余 {remaining} 份请点击「上传并解析」后再次选择即可自动续传",
+                    icon="🔄"
+                )
+                st.caption(f"当前批次处理 {BATCH_LIMIT} 份，待处理 {remaining} 份")
+
+                if st.button(
+                    "上传并解析（前5份）",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=st.session_state.uploading
+                ):
+                    st.session_state.uploading = True
+                    overall_bar = st.progress(0, text="准备中…")
+                    detail_status = st.empty()
+                    results = []
+
+                    for i, f in enumerate(batch_files):
+                        overall_bar.progress(
+                            i / len(batch_files),
+                            text=f"文件 ({i+1}/{len(batch_files)})"
+                        )
+                        file_bar = st.progress(0.0, text=f"⏳ {f.name}")
+
+                        result = upload_document_async(f, file_bar, detail_status)
+                        if result:
+                            results.append(result)
+                        file_bar.empty()
+
+                    overall_bar.empty()
+                    detail_status.empty()
+
+                    if results:
+                        total_chunks = sum(r['chunk_count'] for r in results)
+                        now_str = datetime.now().strftime("%H:%M:%S")
+                        for r in results:
+                            st.session_state.processed_files.append({
+                                "filename": r["filename"],
+                                "chunk_count": r["chunk_count"],
+                                "time": now_str,
+                            })
+                        st.success(f"✅ 前 {len(results)} 份解析完成（{total_chunks} 个片段），剩余 {remaining} 份请重新选择上传")
+                        st.session_state.upload_key_counter += 1
+                    else:
+                        st.warning("⚠ 文件均上传失败，请检查后端服务后重试")
+                    st.session_state.uploading = False
+                    time.sleep(1.2)
                     st.rerun()
         else:
-            st.info("支持 PDF、Word 和 Markdown 格式金融资料（研报 / 公告），最多 5 份同时上传。", icon="ℹ️")
+            # 没有选中文件时：显示提示 + 最近解析记录
+            st.info("支持 PDF、Word 和 Markdown 格式金融资料（研报 / 公告），单批最多 5 份，可分批连续上传。", icon="ℹ️")
+
+            # ── 最近解析完成可视化 ──
+            if st.session_state.processed_files:
+                st.markdown(
+                    '<div style="margin-top:1rem;padding:0.75rem;background:#eafaf1;'
+                    'border-radius:8px;border-left:3px solid #1f8a5f;">'
+                    '<div style="font-size:0.8rem;font-weight:600;color:#14513b;margin-bottom:0.4rem;">'
+                    '📌 最近解析完成</div>',
+                    unsafe_allow_html=True
+                )
+                # 显示最近 6 条
+                for pf in st.session_state.processed_files[-6:]:
+                    st.markdown(
+                        f'<div style="font-size:0.8rem;color:#1c352c;padding:0.15rem 0;">'
+                        f'<span style="color:#1f8a5f;">✓</span> {pf["filename"]} '
+                        f'<span style="color:#9bb3a8;font-size:0.7rem;">({pf["chunk_count"]} 片段 · {pf["time"]})</span>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+                if len(st.session_state.processed_files) > 6:
+                    st.markdown(
+                        f'<div style="font-size:0.7rem;color:#9bb3a8;margin-top:0.2rem;">'
+                        f'… 共 {len(st.session_state.processed_files)} 份已解析</div>',
+                        unsafe_allow_html=True
+                    )
+                st.markdown("</div>", unsafe_allow_html=True)
 
     with col_right:
-        with st.expander("📚 已入库文档", expanded=True):
+        st.markdown('<div class="doc-card-header">📚 已入库文档</div>', unsafe_allow_html=True)
+
+        # ── 搜索输入框 ──
+        search_text = st.text_input(
+            "搜索文件名",
+            placeholder="🔍 输入文件名模糊匹配…",
+            label_visibility="collapsed",
+            key="doc_search"
+        )
+
+        # ── 独立滚动容器（Streamlit 原生） ──
+        with st.container(height=550, border=False):
+            # ── 获取并筛选文档列表 ──
             documents = list_documents()
+            if search_text:
+                search_lower = search_text.lower()
+                documents = [d for d in documents if search_lower in d['filename'].lower()]
 
             if documents:
                 for doc in documents:
                     upload_time = datetime.fromisoformat(doc['upload_time'].replace('Z', '+00:00'))
-                    st.markdown(f"""
-                    <div class="uploaded-file-row">
-                        <div>
-                            <strong style="font-size:0.9rem;">{doc['filename']}</strong>
-                            <div style="font-size:0.75rem;color:#9bb3a8;margin-top:2px;">
-                                {doc['chunk_count']} 个片段 · {upload_time.strftime('%Y-%m-%d %H:%M')}
+                    doc_id = doc['id']
+
+                    # ── 两段确认删除 ──
+                    if st.session_state.confirm_del == doc_id:
+                        col_name, col_yes, col_no = st.columns([4, 1, 1])
+                        with col_name:
+                            st.markdown(f"""
+                            <div>
+                                <div class="doc-row-name" title="{doc['filename']}">{doc['filename']}</div>
+                                <div class="doc-row-meta">{doc['chunk_count']} 个片段 · {upload_time.strftime('%Y-%m-%d %H:%M')}</div>
                             </div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    if st.button("删除", key=f"del_{doc['id']}", type="secondary"):
-                        if delete_document(doc['id']):
-                            st.success("已移除")
-                            st.rerun()
+                            """, unsafe_allow_html=True)
+                        with col_yes:
+                            if st.button("✓ 确认", key=f"yes_{doc_id}", type="primary", use_container_width=True):
+                                if delete_document(doc_id):
+                                    st.toast(f"已删除「{doc['filename']}」", icon="🗑️")
+                                    st.session_state.confirm_del = None
+                                    st.rerun()
+                        with col_no:
+                            if st.button("✗ 取消", key=f"no_{doc_id}", use_container_width=True):
+                                st.session_state.confirm_del = None
+                                st.rerun()
+                    else:
+                        col_name, col_del = st.columns([5, 1])
+                        with col_name:
+                            st.markdown(f"""
+                            <div>
+                                <div class="doc-row-name" title="{doc['filename']}">{doc['filename']}</div>
+                                <div class="doc-row-meta">{doc['chunk_count']} 个片段 · {upload_time.strftime('%Y-%m-%d %H:%M')}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        with col_del:
+                            if st.button("删除", key=f"del_{doc_id}", use_container_width=True):
+                                st.session_state.confirm_del = doc_id
+                                st.rerun()
             else:
-                st.markdown("""
-                <div class="empty-state">
-                    <div class="empty-state-icon">📋</div>
-                    暂无入库文档<br>
-                    <span style="font-size:0.8rem;">请先在左侧上传金融资料</span>
+                st.markdown(f"""
+                <div class="doc-card-empty">
+                    <div class="doc-card-empty-icon">📋</div>
+                    {"暂无匹配文件" if search_text else "暂无入库文档"}
+                    <br><span style="font-size:0.8rem;">请先在左侧上传金融资料</span>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -615,6 +932,11 @@ with tab_qa:
     if st.session_state.last_result:
         qa = st.session_state.last_result
         st.markdown(f'<div style="font-family:\'Noto Serif SC\',serif;font-size:0.95rem;font-weight:600;color:#14513b;background:#eafaf1;border-radius:8px;padding:0.5rem 1rem;margin:0.5rem 0 0.25rem 0;">📝 {qa["question"]}</div>', unsafe_allow_html=True)
+
+        # ── L3 幻觉抑制：时效风险提示条（仅当后端 guard.blocked 为真时展示） ──
+        guard_html = build_guard_banner_html(qa['result'].get('guard'))
+        if guard_html:
+            st.markdown(guard_html, unsafe_allow_html=True)
 
         found = qa['result']['found_in_knowledge_base']
         answer = qa['result']['answer']

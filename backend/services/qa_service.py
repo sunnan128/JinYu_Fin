@@ -21,8 +21,9 @@ from backend.services.vector_store import VectorStoreService
 from backend.services.llm_service import LLMService
 from backend.models.schemas import (
     QueryRequest, QueryResponse, UploadResponse, 
-    HealthResponse, DocumentInfo, Citation
+    HealthResponse, DocumentInfo, Citation, GuardInfo
 )
+from backend.utils.hallucination_guard import filter_by_authority, verify_answer
 
 # ── 中文数字映射（用于"第100条"→"第一百条" 归一化） ──
 _CN_DIGITS = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"]
@@ -170,12 +171,16 @@ class QAService:
             documents = [chunk.content for chunk in chunks]
             metadatas = []
             for chunk in chunks:
-                metadatas.append({
+                meta = {
                     "document_id": document_id,
                     "filename": filename,
                     "page_number": chunk.page_number or 0,
-                    "paragraph_number": chunk.paragraph_number or 0
-                })
+                    "paragraph_number": chunk.paragraph_number or 0,
+                }
+                # 新增：携带爬虫写入的 front-matter 元数据（权威机构/效力状态/施行日期/
+                # 排序键/令号），供 L1 检索端权威度过滤消费。不改原字段，仅追加。
+                meta.update(chunk.metadata)
+                metadatas.append(meta)
             
             # ── 3. 分批编码向量 ──
             batch_size = 16
@@ -360,18 +365,80 @@ class QAService:
                 request.top_k
             )
         
+        # ── L1 检索端权威度过滤（消费 chunk.metadata 的权威机构/效力状态等） ──
+        # 在喂给 LLM 之前剔除已废止/失效块、同法规去重保最新版、按权威机构排序。
+        try:
+            l1 = filter_by_authority(search_results)
+            search_results = l1.kept
+        except Exception as e:
+            print(f"[GUARD][L1] 权威度过滤异常，降级为不过滤: {e}")
+
         # 传给 LLM 时仍用原始问题（用户看到的是自己输入的问题）
         answer, citations, found_kb, processing_time = self.llm_service.generate_answer(
             request.question,
             search_results,
             request.use_rerank
         )
-        
+
+        # ── L3 生成后校验：检查答案是否引用已废止条款（最后一道兜底） ──
+        guard_blocked = False
+        guard_hits = []
+        try:
+            l3 = verify_answer(answer)
+            if l3.blocked:
+                guard_blocked = True
+                guard_hits = [
+                    {
+                        "entry_id": h.entry_id,
+                        "law": h.law,
+                        "clause": h.clause,
+                        "keyword": h.keyword,
+                        "replaced_by": h.replaced_by,
+                        "abolished_by": h.abolished_by,
+                        "issued_date": h.issued_date,
+                        "abolished_date": h.abolished_date,
+                        "source_url": h.source_url,
+                    }
+                    for h in l3.hits
+                ]
+                # 要求重答：附加"不可引用已废止条款"的强约束，仅依据现行有效内容重新生成
+                regen_question = self._build_regenerate_question(request.question, l3.hits)
+                regen_answer, regen_citations, regen_found, regen_time = (
+                    self.llm_service.generate_answer(
+                        regen_question, search_results, request.use_rerank
+                    )
+                )
+                # 重答结果若不再引用已废止条款则采用；否则保留原答案但仍打标
+                if not verify_answer(regen_answer).blocked:
+                    answer, citations, found_kb, processing_time = (
+                        regen_answer, regen_citations, regen_found, regen_time
+                    )
+        except Exception as e:
+            print(f"[GUARD][L3] 生成后校验异常，降级为不拦截: {e}")
+
         return QueryResponse(
             answer=answer,
             citations=citations,
             found_in_knowledge_base=found_kb,
-            processing_time_ms=processing_time
+            processing_time_ms=processing_time,
+            guard=GuardInfo(
+                blocked=guard_blocked,
+                action="regenerate" if guard_blocked else "allow",
+                hits=guard_hits,
+            ),
+        )
+
+    def _build_regenerate_question(self, question: str, hits) -> str:
+        """构造重答提示：明确告知模型其先前回答引用了已废止/失效条款，要求仅依据现行有效内容重答。"""
+        clauses = "；".join(
+            f"{h.law}{h.clause}（命中关键词：{h.keyword}）" for h in hits
+        )
+        return (
+            f"{question}\n\n"
+            f"【重要修正】你此前的回答引用了已废止/失效的条款：{clauses}。"
+            f"这些条款已不再具有法律效力，严禁再将其作为有效依据。"
+            f"请仅依据检索片段中的现行有效内容重新回答；若检索片段无相关内容，"
+            f"请明确说明\"根据提供的资料，未找到相关信息\"。"
         )
     
     async def get_documents(self) -> List[DocumentInfo]:

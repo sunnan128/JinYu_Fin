@@ -15,6 +15,7 @@ from typing import List, Dict, Any, Tuple, Optional
 from openai import OpenAI
 from backend.config import settings
 from backend.models.schemas import Citation
+from backend.utils.hallucination_guard import build_constrained_system_note
 
 # ── LangSmith 全链路追踪（条件化集成） ──
 if settings.LANGSMITH_TRACING:
@@ -235,7 +236,10 @@ class LLMService:
                 messages=[
                     {
                         "role": "system",
-                        "content": "你是一个专业的金融分析助手，严谨、准确、只基于提供的文档内容回答。"
+                        "content": (
+                            "你是一个专业的金融分析助手，严谨、准确、只基于提供的文档内容回答。"
+                            + "\n\n" + build_constrained_system_note()
+                        ),
                     },
                     {
                         "role": "user",
