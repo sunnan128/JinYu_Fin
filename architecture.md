@@ -1,8 +1,8 @@
 # 金语AI 金融知识问答系统 —— 架构设计文档
 
-> **文档版本**：v1.1  
-> **最后更新**：2026-07-24  
-> **文档状态**：已评审定稿（2026-07 补充 ADR-009 切块边界感知修复）
+> **文档版本**：v1.3  
+> **最后更新**：2026-07-27  
+> **文档状态**：已评审定稿（2026-07-24 补充 ADR-009 切块边界感知；2026-07-25 补充 ADR-010 三层幻觉抑制守卫接入；2026-07-27 补充 ADR-011 Phase D 数据底座衔接灌库脚本）
 
 ---
 
@@ -42,6 +42,8 @@
 | 文档解析 | PDF / Word / Markdown 多格式支持 |
 | 异步上传 | 大文档异步处理 + 进度轮询 |
 | 溯源输出 | 回答附带引用来源（文档名/章节/条款/页码） |
+| **三层幻觉抑制** | L1 检索端权威度/时效过滤、L2 Prompt 强约束、L3 生成后校验（比对已废止条款对照表） |
+| **时效风险告警** | 命中已废止/失效条款时前端展示 ⚠️ 提醒（含发行/废止日期、明文废止依据、官方原文链接） |
 
 ### 1.3 设计原则
 
@@ -146,6 +148,7 @@ ragas>=0.1.0             # 评估用
 | **Entity Linker** | 金融实体别名匹配，从问句抽取标准名 + 行业编码 |
 | **Graph Service** | 金融知识图谱查询（Neo4j Cypher），不可用时降级到内置 Mock 图谱 |
 | **Document Parser** | 多格式文档解析 + 切分策略（标题切分/**边界感知**条款切分/段落切分） |
+| **Hallucination Guard** | 三层幻觉抑制守卫（L1 检索端权威度过滤 / L2 Prompt 强约束 / L3 生成后校验），依赖 `superseded.json` 已废止条款对照表 |
 
 ---
 
@@ -413,7 +416,11 @@ hybrid_retriever.py
     │
     ├── 4. LLM 答案生成（检索结果 → Prompt → API 调用）
     │
-    └── 5. 返回结果（答案 + 引用来源 + 处理时间）
+    ├── 5. **L1 检索端权威度过滤**：检索结果喂给 LLM 前，`filter_by_authority()` 剔除已废止/失效块、同法规多版本去重保最新、按权威机构排序
+    │
+    ├── 6. **L3 生成后校验**：答案生成后 `verify_answer()` 比对 `superseded.json`，命中已废止条款则打标（`QueryResponse.guard`）+ 强约束重答一次兜底
+    │
+    └── 7. 返回结果（答案 + 引用来源 + 处理时间 + 时效风险标记）
 ```
 
 ### 6.3 混合检索数据流（HybridRetriever）
@@ -671,7 +678,17 @@ LANGSMITH_PROJECT = "jinyu-rag"
   - **鲁棒性**：L1/L3 均包在 `try/except` 内，异常时降级为"不过滤/不拦截"，不影响正常问答；`superseded.json` 缺失时 L3 自动放行。
 - **理由**：三层分别堵在"检索端 / 生成端 / 生成后"三个位置，是工业级 RAG 防伪的标准做法；守卫为纯新增独立模块，可独立测试，不影响既有功能。
 - **影响**：新增 `tests/test_guard_wiring.py` 集成测试（上传/解析/检索/L1 拦截/L3 拦截-打标-重答 全链路，无需真实模型与 API）；连同 `tests/test_hallucination_guard.py` 共 18 项测试全部通过。`QueryResponse` 新增可选 `guard` 字段，前端可据此展示时效风险告警（旧前端忽略该字段，向后兼容）。
-  - **前端展示（补充）**：`frontend/app_jinyu.py` 在答案区上方新增 ⚠️ 时效风险 提示条——仅当 `guard.blocked=True` 时渲染（`build_guard_banner_html()` 纯函数，位于新建 `frontend/guard_banner.py`，无 streamlit 依赖、可单测）。提示条列出命中的已废止/失效条款（法规名+条款+命中关键词+现行有效替代），告知用户系统已自动时效校验并尽量重答。含 `tests/test_guard_banner.py`（4 项）共 22 项测试通过。
+  - **前端展示（补充）**：`frontend/app_jinyu.py` 在答案区上方新增 ⚠️ 时效风险 提示条——仅当 `guard.blocked=True` 时渲染（`build_guard_banner_html()` 纯函数，位于新建 `frontend/guard_banner.py`，无 streamlit 依赖、可单测）。提示条列出命中的已废止/失效条款（法规名+条款+命中关键词+现行有效替代），告知用户系统已自动时效校验并尽量重答。
+  - **提示条明细增强（2026-07-25）**：`superseded.json` 每条补充 `issued_date`（失效法规发行/施行日）、`abolished_by`（明文废止/修改决定名称）、`abolished_date`（**决定施行日**口径，与"通过日"区分）、`source_url`（官方原文链接）。提示条逐条展示 📅 发行日期 / 📜 明文废止依据 / 📅 废止日期（决定施行日）/ 🔗 查看官方原文，字段缺失则隐藏空标签。`superseded.json` 当前为 v3、含 5 条典型废止条款（存贷比75% / 旧反洗钱法2006 / 保本理财 / IPO核准制 / 存款利率管制），供 L3 与前端展示共用。含 `tests/test_guard_banner.py`（6 项）共 24 项测试通过。
+
+### ADR-011：Phase D 数据底座衔接（灌库脚本）
+
+- **状态**：已实施（2026-07-27，对应根目录新增 `ingest_raw.py`）
+- **背景**：ADR-010 中 L1 依赖 chunk 元数据（权威机构/效力状态/施行日期/排序键/令号）。但前端上传的 PDF/Word 通常不带这些字段，导致 `meta.update(chunk.metadata)` 取到空字典 → L1 在真实链路空转（全部保留、仅按默认权重，等于没拦）。爬虫产线 `finance_rag_data/crawl_regulations.py` 已把 17 部法规的元数据写入 `raw/*.md` 顶部 front-matter，却一直没进库。
+- **决策**：新增 `ingest_raw.py` 批量灌库脚本（**纯新增、零改动现有功能**），把 `raw/*.md` 经既有 `DocumentParser.parse_file` 解析（自动提取 front-matter 入 `chunk.metadata`）后，复用与前端上传完全一致的入库路径 `QAService.upload_document` 灌入 ChromaDB。提供 `--source/--force/--dry-run` 参数；按文件名去重（默认跳过已存在，避免重复灌）；单文件失败不阻断整体。
+- **效果**：灌库后向量库里的 chunk 真正携带时效元数据，L1 的权威度排序与"已废止剔除"（当库中存在 `效力状态: abolished` 的块时）才会真正生效，不再空转。dry-run 确认 17 部 / 1282 块。
+- **测试**：新增 `tests/test_ingest_raw.py`（4 项）——解析真实 raw 文件保留元数据、灌库把元数据带入 store、合成 abolished 文档经 L1 被剔除（证明 A 让 L1 能消费）、去重跳过已存在；连同既有测试共 **28 项全部通过、无回归**。
+- **配套**：重建 `sample_test_docs/`（此前丢失），含 `0_L1已废止拦截演示.md`（`效力状态: abolished`，用于直观验证 L1 拦截）及 5 份 L3 触发/现行有效回归文档。
 
 ---
 
@@ -787,16 +804,20 @@ project_root/
 │   │   ├── hybrid_retriever.py   # 三路混合检索器
 │   │   └── graph_service.py      # 图谱检索 (Neo4j/Mock)
 │   ├── utils/
-│   │   ├── document_parser.py    # 文档解析与切分
-│   │   └── entity_linker.py      # 金融实体链接
+│   │   ├── document_parser.py    # 文档解析与切分（边界感知 + front-matter）
+│   │   ├── entity_linker.py      # 金融实体链接
+│   │   ├── hallucination_guard.py # 三层幻觉抑制守卫（L1/L2/L3）
+│   │   └── superseded.json       # 已废止/失效条款对照表（驱动 L3 + 前端）
 │   └── data/
 │       ├── chroma/               # ChromaDB 持久化
 │       ├── model_cache/          # 嵌入模型缓存
 │       └── bm25_index.pkl        # BM25 索引
 ├── frontend/
 │   ├── app.py                    # 默认前端
-│   ├── app_jinyu.py              # 金语品牌前端（主推）
-│   └── app_xinglin.py            # 杏林品牌前端
+│   ├── app_jinyu.py              # 金语品牌前端（主推，接 ⚠️ 时效风险提醒）
+│   ├── app_xinglin.py            # 杏林品牌前端
+│   └── guard_banner.py           # 时效风险提醒条 HTML 渲染（纯函数）
+├── sample_test_docs/             # 端到端测试样例文档（触发/不触发提示条）
 ├── eval/
 │   ├── dataset.json              # 评估数据集
 │   ├── run_eval.py               # 评估执行脚本

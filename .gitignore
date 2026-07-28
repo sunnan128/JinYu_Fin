@@ -73,3 +73,9 @@ solo/
 
 #_private不上传
 _private/
+
+# 本地测试样例文档（仅供本地演示/测试，不入库）
+sample_test_docs/
+
+# 本地运行日志（灌库 / 刷新脚本产出，不入库）
+*_run.log
