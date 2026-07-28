@@ -2,7 +2,7 @@
 
 > **文档版本**：v1.3  
 > **最后更新**：2026-07-27  
-> **文档状态**：已评审定稿（2026-07-24 补充 ADR-009 切块边界感知；2026-07-25 补充 ADR-010 三层幻觉抑制守卫接入；2026-07-27 补充 ADR-011 Phase D 数据底座衔接灌库脚本）
+> **文档状态**：已评审定稿（2026-07-24 补充 ADR-009 切块边界感知；2026-07-25 补充 ADR-010 三层幻觉抑制守卫接入；2026-07-27 补充 ADR-011 Phase D 数据底座衔接灌库脚本；2026-07-28 补充 ADR-012 PDF 上传元数据抽取、ADR-013 检索主体匹配全角/半角/助词归一）
 
 ---
 
@@ -689,6 +689,34 @@ LANGSMITH_PROJECT = "jinyu-rag"
 - **效果**：灌库后向量库里的 chunk 真正携带时效元数据，L1 的权威度排序与"已废止剔除"（当库中存在 `效力状态: abolished` 的块时）才会真正生效，不再空转。dry-run 确认 17 部 / 1282 块。
 - **测试**：新增 `tests/test_ingest_raw.py`（4 项）——解析真实 raw 文件保留元数据、灌库把元数据带入 store、合成 abolished 文档经 L1 被剔除（证明 A 让 L1 能消费）、去重跳过已存在；连同既有测试共 **28 项全部通过、无回归**。
 - **配套**：重建 `sample_test_docs/`（此前丢失），含 `0_L1已废止拦截演示.md`（`效力状态: abolished`，用于直观验证 L1 拦截）及 5 份 L3 触发/现行有效回归文档。
+
+### ADR-012：PDF 上传元数据抽取（B 方案，让 L1 对 PDF 生效）
+
+- **状态**：已实施（2026-07-28，对应新增 `backend/utils/pdf_metadata_extractor.py` + 改造 `document_parser.parse_pdf` + `ingest_raw.py` 支持 PDF）
+- **背景**：ADR-011 解决了爬虫 `.md` 的元数据进库，但 ADR-010 中的 L1 仍对**用户直接上传的 PDF** 空转——`parse_pdf` 原本只给 chunk 挂 `{"filename": ...}`，没有 `权威机构/效力状态/施行日期/排序键/令号`，L1 的权威度排序与已废止剔除对这些块完全失效。用户此前明确担心"面试会被问 PDF 怎么抽元数据"。
+- **决策**：
+  - 新增 `pdf_metadata_extractor.py`，用**与爬虫 `crawl_regulations.py` 同源的正则 heuristic** 从 PDF 正文抽字段：权威机构（正文识别发布机关 → 映射到与爬虫一致的规范键 `central_bank/nfra/csrc/exchange/gov_other`）、令号、施行日期、效力状态、排序键。
+  - 抽出的字段**键名与 `.md` front-matter 完全相同**（权威机构/令号/施行日期/效力状态/排序键），因此可直接并入 `chunk.metadata`，被 `hallucination_guard` 原样消费——**守卫代码零改动**。
+  - 在 `parse_pdf` 切分后把抽取结果并入每个 chunk（合并并保底 `filename`）；异常时优雅降级为仅 `filename`，绝不阻断解析/入库。
+  - 额外附加 `_meta_source`（= `pdf_heuristic`）、`_meta_confidence`（high/medium/low）透明标注，诚实标明"PDF 元数据是正文正则估的、关键字段建议人工核对"，不伪造高置信度。
+  - `ingest_raw.py` 的 `collect_raw_documents` 从仅 `*.md` 扩展到同时 `*.pdf`，批量灌库也能吃 PDF（parse_file 已支持）。
+- **设计取舍**：PDF 无 URL/域名，无法像爬虫那样靠域名判机构，故改为正文关键词识别机构名；效力状态默认 `unknown`（L1 的 `_is_abolished` 对 unknown 返回 False → "宁可漏拦、绝不误拦"，安全不误伤有效内容）。
+- **效果**：上传/灌库的 PDF 法规 now 携带时效元数据，L1 的权威度排序与已废止剔除对 PDF 同样生效，补齐 ADR-010 在真实上传链路上的最后一块空缺。
+- **测试**：新增 `tests/test_pdf_metadata_extractor.py`（13 项）——单字段抽取（机构/令号/日期/状态）、与 front-matter 同构键完整性、真实 PDF 端到端抽取、异常兜底；连同既有测试共 **41 项全部通过、无回归**。
+
+---
+
+### ADR-013：检索主体匹配全角/半角/助词归一（修复"法规条文检索不到"）
+
+- **状态**：已实施（2026-07-28，对应改造 `backend/services/vector_store.py` + 新增 `tests/test_subject_matching.py`、`tests/test_national_compensation_law.py`）
+- **背景**：层级检索（`hybrid_search` → `_search_by_subject_metadata` + `_apply_hierarchical_scoring`）依赖"主体法律名 in 文件名"把目标法规的 chunk 加进候选池并加权。原实现用**死板的字符串包含** `subject_key in filename`。用户实测上传《国家赔偿法》PDF 后提问 `中华人民共和国国家赔偿法（２０１２年）的第十一条是什么`，系统从问题截出的 `subject_key` = `中华人民共和国国家赔偿法（２０１２年）的`，而库内文件名是半角的 `（2012）`——两者**全角≠半角**、且多了个"的" → 匹配失败 → 该法规全部 chunk 未进候选池 → 被其他文档中大量的"赔偿"二字挤出 top 结果，表现为"检索不到"。
+- **决策**：
+  - 新增模块级辅助函数 `_normalize_match_text`（全角→半角 NFKC 归一 + 去空格）、`_core_law_name`（提取法律名核心：去掉 UUID 前缀、扩展名、年份括号、末尾"的/之"等助词）、`_subject_matches`（双向包含判定，兼容用户简称如"信托法""赔偿法"匹配全称文件名）。
+  - 将 `_search_by_subject_metadata` 与 `_apply_hierarchical_scoring` 中两处 `subject_key in filename` 替换为 `_subject_matches(subject_key, filename)`，使匹配对全角/半角、多余助词、用户简称均鲁棒。
+  - 仅放宽"主体识别"这一步，不影响其它检索打分与 rerank；`_apply_hierarchical_scoring` 仍是"命中目标法规且含条款号才 +FULL_MATCH_BOOST"，避免无差别加权。
+- **设计取舍**：匹配归一在"文件名核心名"层面做，不改动 chunk 正文与向量；对扫描版/无文字 PDF 无效（那是独立问题，本项目已通过 `pdf_metadata_extractor` 解决文字抽取）。
+- **效果**：国家赔偿法 PDF 在"全角年份+的+条款""半角年份+条款""简称"等 10 种问法下均被正确召回，目标条文进入候选池 top。
+- **测试**：新增 `tests/test_subject_matching.py`（6 项，纯单元验证归一/核心名/双向包含/层级加分）与 `tests/test_national_compensation_law.py`（10 项，真实 ChromaDB + 本地 bge + `hybrid_search` 对《国家赔偿法》PDF 的 10 种问法回归）；连同既有测试共 **57 项全部通过、无回归**。
 
 ---
 

@@ -98,7 +98,22 @@ class DocumentParser:
                 chunks.extend(page_chunks)
         finally:
             doc.close()
-        
+
+        # 【B 方案】抽取 PDF 元数据并并入每个 chunk，使 L1 对 PDF 生效。
+        # 与 .md front-matter 使用完全相同的键名，hallucination_guard 原样消费。
+        # 异常时优雅降级：只保留 filename，不阻断解析/入库。
+        try:
+            from backend.utils.pdf_metadata_extractor import extract_pdf_metadata
+            pdf_meta = extract_pdf_metadata(file_path)
+        except Exception:
+            pdf_meta = {}
+        if pdf_meta:
+            for ch in chunks:
+                merged = dict(pdf_meta)
+                merged.update(ch.metadata or {})
+                merged["filename"] = filename  # 始终以实际文件名覆盖
+                ch.metadata = merged
+
         return chunks
     
     @staticmethod

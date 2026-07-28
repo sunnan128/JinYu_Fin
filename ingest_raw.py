@@ -49,18 +49,23 @@ DEFAULT_RAW_DIR = r"D:\workbuddy_pro\finance_rag_data\raw"
 
 
 def collect_raw_documents(source_dir: str):
-    """【纯函数·可单测】扫描 source_dir 下所有 .md，逐文件解析为 (filename, chunks)。
+    """【纯函数·可单测】扫描 source_dir 下的 .md 与 .pdf，逐文件解析为 (filename, chunks)。
 
     不接触向量库/嵌入模型，仅依赖 DocumentParser。返回 list[(filename, List[DocumentChunk])]。
     解析失败的文件打印告警并跳过，不影响其余文件。
+    PDF 走 parse_pdf（已并入时效元数据，L1 对其生效）；.md 走 parse_markdown（front-matter）。
     """
     from backend.utils.document_parser import DocumentParser
 
     results = []
-    md_paths = sorted(glob.glob(os.path.join(source_dir, "*.md")))
-    if not md_paths:
+    # 同时支持 .md（爬虫 front-matter）与 .pdf（B 方案：正文正则抽元数据）
+    paths = sorted(
+        glob.glob(os.path.join(source_dir, "*.md"))
+        + glob.glob(os.path.join(source_dir, "*.pdf"))
+    )
+    if not paths:
         return results
-    for path in md_paths:
+    for path in paths:
         filename = os.path.basename(path)
         try:
             chunks = DocumentParser.parse_file(path)
@@ -85,7 +90,7 @@ def _existing_filenames(qa_service) -> set:
 
 def ingest_documents(qa_service, source_dir: str, force: bool = False,
                      dry_run: bool = False) -> int:
-    """把 source_dir 下的 .md 灌入库。
+    """把 source_dir 下的 .md 与 .pdf 灌入库。
 
     返回本次实际新增的 chunk 总数（dry_run 下返回将新增的预估总数）。
     """
@@ -130,7 +135,7 @@ def ingest_documents(qa_service, source_dir: str, force: bool = False,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="把带 front-matter 的法规 .md 批量灌入向量库（Phase D 数据底座衔接）"
+        description="把带 front-matter 的法规 .md / .pdf 批量灌入向量库（Phase D 数据底座衔接 + B 方案 PDF 元数据）"
     )
     parser.add_argument(
         "--source", default=DEFAULT_RAW_DIR,

@@ -16,6 +16,7 @@ import os
 import re
 import pickle
 import uuid
+import unicodedata
 from typing import List, Dict, Any, Optional, Tuple
 from backend.config import settings
 from backend.utils.document_parser import DocumentChunk
@@ -231,6 +232,47 @@ def _normalize_article_variant(article_str: str) -> Optional[str]:
             return f'{prefix}{arabic}{suffix}'
     
     return None
+
+# ── 主体关键词归一化与模糊匹配 ──
+# 修复：用户查询截取的 subject_key 常含全角括号/数字、末尾多余助词（的/年），
+# 与文件名（半角、无"的"）直接 `in` 匹配会失败，导致主体补充检索落空、
+# "某法第X条"类提问检索不到该法规内容。
+def _normalize_match_text(s: str) -> str:
+    """用于包含匹配的归一化：全角→半角、去空白、转小写（不影响中文匹配）。"""
+    if not s:
+        return ""
+    return unicodedata.normalize("NFKC", s).replace(" ", "").lower()
+
+
+def _core_law_name(s: str) -> str:
+    """从文件名或主体关键词提取'法律名称核心'，用于模糊主体匹配。
+    依次去除：UUID/序号前缀、扩展名、年份括号（全/半角）、末尾助词（的/之/等）。
+    """
+    s = _normalize_match_text(s)
+    s = re.sub(r"^[\w-]+_", "", s)          # 去 UUID/序号前缀（首个下划线前的段）
+    s = re.sub(r"\.[a-z]+$", "", s)          # 去扩展名
+    s = re.sub(r"[（(][0-9]{3,4}年?[）)]", "", s)  # 去掉年份括号
+    s = re.sub(r"[的之在中关于及相关]$", "", s)       # 去末尾助词
+    return s
+
+
+def _subject_matches(subject_key: str, filename: str) -> bool:
+    """判断某 chunk 的文件名是否属于用户查询的'主体法律'。
+
+    采用'核心法律名双向包含'，兼容：
+      - 全角/半角括号与数字（２０１２ vs 2012）
+      - 查询多出的'的/年'等助词
+      - 用户使用简称（如'赔偿法'匹配'中华人民共和国国家赔偿法'）
+    核心过短（退化）时用归一化双向包含兜底。
+    """
+    core_subj = _core_law_name(subject_key)
+    core_fn = _core_law_name(filename)
+    if len(core_subj) >= 4 and len(core_fn) >= 4:
+        return core_subj in core_fn or core_fn in core_subj
+    ns = _normalize_match_text(subject_key)
+    nf = _normalize_match_text(filename)
+    return ns in nf or nf in ns
+
 
 class VectorStoreService:
     def __init__(self):
@@ -517,7 +559,9 @@ class VectorStoreService:
             metadata = item.get('metadata', {})
             filename = metadata.get('filename', '') if isinstance(metadata, dict) else ''
             
-            has_subject = (subject_key in content) or (subject_key in filename)
+            has_subject = _subject_matches(subject_key, filename) or (
+                _normalize_match_text(subject_key) in _normalize_match_text(content)
+            )
             has_sub = any(v in content for v in sub_variants)
             
             if has_subject and has_sub:
@@ -544,7 +588,7 @@ class VectorStoreService:
         for doc in self.all_documents:
             meta = doc.get('metadata', {})
             filename = meta.get('filename', '') if isinstance(meta, dict) else ''
-            if subject_key in filename:
+            if _subject_matches(subject_key, filename):
                 results.append({
                     'id': doc['id'],
                     'content': doc['content'],

@@ -216,11 +216,11 @@ python backend/utils/entity_linker.py
 # 混合检索器单元测试
 python backend/services/hybrid_retriever.py
 
-# 三层幻觉抑制守卫 / 接线集成 / 前端提醒条 全套测试（共 24 项）
+# 三层幻觉抑制守卫 / 接线集成 / 前端提醒条 / PDF 元数据抽取 / 检索主体匹配 / 国家赔偿法PDF检索 全套测试（共 57 项）
 python -m pytest tests -v
 ```
 
-> 测试无需真实模型与 API：底层向量库与 LLM 以 Fake 对象替换，覆盖上传/解析/检索/L1 拦截/L3 拦截-打标-重答/提醒条渲染等全链路。
+> 绝大多数测试无需真实模型与 API：底层向量库与 LLM 以 Fake 对象替换，覆盖上传/解析/检索/L1 拦截/L3 拦截-打标-重答/提醒条渲染/PDF 元数据抽取等全链路。另有 `tests/test_subject_matching.py` 与 `tests/test_national_compensation_law.py` 两条检索回归测试会连接**真实 ChromaDB + 本地 bge 向量模型**验证检索链路（需先灌库，见下方「数据底座」），用于固化"全角/半角/助词导致法规条文检索不到"的修复。
 
 ---
 
@@ -284,7 +284,7 @@ project_root/
 - **多级降级**：Markdown 标题切分 → 法律条款切分 → 空行段落切分；相邻小片段（< 80 字）自动合并，减少向量编码次数。
 - **多格式兼容**：同一套规则兼容「每行一条」与「整页挤成一行表格」等多种法规排版，并支持 PDF / Word / Markdown。
 
-> 对应实现：`backend/utils/document_parser.py`（`parse_markdown` / `extract_front_matter`）与 `backend/utils/financial_document_parser.py`；设计决策见项目 `architecture.md` 的 **ADR-009**。独立爬虫产线 `finance_rag_data/chunk_regulations.py` 采用相同边界感知规则，输出 `chunks.jsonl`。
+> 对应实现：`backend/utils/document_parser.py`（`parse_markdown` / `extract_front_matter`）与 `backend/utils/financial_document_parser.py`；设计决策见项目 `architecture.md` 的 **ADR-009**。独立爬虫产线 `finance_rag_data/crawl_regulations.py` 采用相同边界感知规则，输出 `chunks.jsonl`。
 
 ---
 
@@ -292,7 +292,7 @@ project_root/
 
 金融 RAG 最怕"答错了还像真的"——模型引用已废止/失效条款、混用不同版本、或编造条文编号。系统在检索→生成→生成后三个位置各设一道防线，这是区别于普通聊天机器人的核心合规设计：
 
-- **L1 检索端权威度过滤**（`hallucination_guard.filter_by_authority`）：在检索结果喂给 LLM 前，根据每个 chunk 的元数据（`权威机构` / `效力状态` / `施行日期` / `排序键` / `令号`）剔除 `已废止/失效` 候选、同法规多版本去重保最新、按权威机构权重排序。
+- **L1 检索端权威度过滤**（`hallucination_guard.filter_by_authority`）：在检索结果喂给 LLM 前，根据每个 chunk 的元数据（`权威机构` / `效力状态` / `施行日期` / `排序键` / `令号`）剔除 `已废止/失效` 候选、同法规多版本去重保最新、按权威机构权重排序。**该元数据来源两条路径**：① 爬虫产线把字段写成 `.md` 顶部 front-matter（`crawl_regulations.py`）；② 用户直接上传的 **PDF/Word** 由 `pdf_metadata_extractor.py` 用与爬虫同源的正则从正文抽取（见 `ADR-012`），因此 L1 对上传的 PDF 同样生效，不再空转。
 - **L2 Prompt 强约束**（`hallucination_guard.build_constrained_system_note`）：在 LLM 的 system prompt 硬性注入——只能依据检索片段、无依据须答"未找到相关信息"、严禁编造条款/编号、发现已废止条款须提示时效风险。
 - **L3 生成后校验**（`hallucination_guard.verify_answer`）：答案生成后比对 `superseded.json`，命中已废止条款则打标（`QueryResponse.guard`），并以"不可引用已废止条款"的强约束重答一次兜底。
 
@@ -305,7 +305,7 @@ project_root/
 
 > 对应实现与决策：设计决策见项目 `architecture.md` 的 **ADR-010**。关键文件：`backend/utils/hallucination_guard.py`（守卫）、`backend/utils/superseded.json`（已废止条款对照表，v3，当前含 5 条典型废止条款）、`backend/services/qa_service.py`（L1/L3 接线）、`backend/services/llm_service.py`（L2 接线）、`frontend/guard_banner.py`（提醒条渲染）。守卫模块为纯新增、零依赖，配有 `tests/test_hallucination_guard.py`（三层功能）、`tests/test_guard_wiring.py`（接线集成）、`tests/test_guard_banner.py`（提醒条）共 24 项测试。
 
-> **测试样例**：`sample_test_docs/` 下提供 5 个 Markdown 样例（存贷比旧规 / 保本理财旧规 / 核准制 IPO 旧规 / 存款利率管制旧规 / 现行有效流动性监管），前 4 个上传后应触发 ⚠️ 提醒，最后 1 个用于验证正常问答不误报。
+> **测试样例**：`sample_test_docs/` 下提供 6 个 Markdown 样例——`0_L1已废止拦截演示.md`（效力状态 abolished，验证 L1 拦截）+ 存贷比旧规 / 保本理财旧规 / 核准制 IPO 旧规 / 存款利率管制旧规（以上 4 个上传后应触发 ⚠️ 提醒）+ 现行有效流动性监管（验证正常问答不误报）。
 
 ---
 
